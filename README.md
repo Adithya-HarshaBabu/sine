@@ -27,5 +27,5 @@ npm run dev                  # http://127.0.0.1:5173
 For iOS, open `ios/Sine.xcodeproj` in Xcode (see [ios/README.md](ios/README.md)).
 
 ## Deploy
-The web app deploys to Vercel from the repo root (`vercel.json` builds `web/`). Set the
-`VITE_SPOTIFY_CLIENT_ID` environment variable in the Vercel project.
+The web app deploys to Vercel: import the repo, set **Root Directory** to `web` (Vercel then detects
+Vite), and add the `VITE_SPOTIFY_CLIENT_ID` environment variable.
