@@ -20,7 +20,7 @@ sine-wave seek bar, album-colour theming, full-screen Now Playing, time-synced l
 ## Run locally
 ```bash
 cd web
-cp .env.example .env.local   # add VITE_SPOTIFY_CLIENT_ID
+cp .env.example .env.local   # optional: VITE_SPOTIFY_CLIENT_ID for your own Spotify app
 npm install
 npm run dev                  # http://127.0.0.1:5173
 ```
@@ -28,4 +28,6 @@ For iOS, open `ios/Sine.xcodeproj` in Xcode (see [ios/README.md](ios/README.md))
 
 ## Deploy
 The web app deploys to Vercel: import the repo, set **Root Directory** to `web` (Vercel then detects
-Vite), and add the `VITE_SPOTIFY_CLIENT_ID` environment variable.
+Vite). Sine's Client ID is built in; set `VITE_SPOTIFY_CLIENT_ID` only to use a different Spotify app.
+
+Live: <https://sine-ten.vercel.app/>

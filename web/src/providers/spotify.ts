@@ -1,7 +1,10 @@
 import { createEmitter } from './emitter'
 import { emptyState, type Artist, type MusicProvider, type PlaybackState, type Playlist, type RepeatMode, type Track } from '../types'
 
-const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID as string | undefined
+// Client IDs are public (PKCE uses no client secret), so Sine's own ID is the default.
+// Set VITE_SPOTIFY_CLIENT_ID to use a different Spotify app.
+const DEFAULT_CLIENT_ID = 'ec55e1a63d84406aa4206319e543ffa7'
+const CLIENT_ID = (import.meta.env.VITE_SPOTIFY_CLIENT_ID as string | undefined) || DEFAULT_CLIENT_ID
 const REDIRECT_URI = (import.meta.env.VITE_SPOTIFY_REDIRECT_URI as string | undefined) ?? `${location.origin}/`
 const SCOPES = [
   'streaming',
