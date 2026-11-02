@@ -1,0 +1,21 @@
+# Dependencies & builds
+node_modules/
+web/dist/
+ios/build/
+DerivedData/
+
+# Local env (Spotify Client ID lives here for local dev)
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+xcuserdata/
+*.xcuserstate
+
+# Local tooling
+.claude/
+.vercel/
