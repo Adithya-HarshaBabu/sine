@@ -278,15 +278,85 @@ h1 {
 .pl-note {
   padding: 4px 10px;
 }
-.link-btn {
+.account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin-top: auto;
-  padding: 8px 10px;
-  text-align: left;
+  padding: 10px 4px 0 10px;
+  border-top: 1px solid var(--line);
+}
+.account img,
+.account .ph {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.account .truncate {
+  flex: 1;
+}
+.link-btn {
+  flex-shrink: 0;
+  padding: 6px;
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: 0.82rem;
+  white-space: nowrap;
 }
 .link-btn:hover {
   color: var(--text);
+}
+
+/* ---------- login ---------- */
+
+.login {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: 24px 16px;
+  overflow: hidden;
+}
+.login-wave {
+  position: absolute;
+  left: 0;
+  bottom: 12%;
+  width: 100%;
+  height: 240px;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  opacity: 0.25;
+  vector-effect: non-scaling-stroke;
+}
+.login-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  max-width: 400px;
+  padding: 32px;
+  border-radius: 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+.login-card .brand {
+  padding: 0;
+}
+.login-card p {
+  margin: 0;
+  line-height: 1.5;
+}
+.login-card h1 + p {
+  margin-top: 8px;
+}
+.login-card .error {
+  margin: 0;
+}
+.login-card .primary {
+  width: 100%;
 }
 
 /* ---------- main ---------- */
@@ -601,9 +671,9 @@ input[type='range']::-moz-range-thumb {
   .library {
     display: none;
   }
-  .link-btn {
+  .account {
     margin-top: 0;
-    padding: 0 10px;
+    padding-top: 8px;
   }
   .main {
     padding: 16px;

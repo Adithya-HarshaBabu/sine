@@ -3,12 +3,14 @@ import { spotify } from './providers/spotify'
 import { useArtworkTint } from './lib/artworkColor'
 import { readPref, writePref } from './lib/prefs'
 import { Home } from './components/Home'
+import { Login } from './components/Login'
 import { NowPlaying } from './components/NowPlaying'
 import { PlaylistNav } from './components/PlaylistNav'
 import { TrackList } from './components/TrackList'
 import { WaveProgress } from './components/WaveProgress'
 import {
   emptyState,
+  type Account,
   type Home as HomeData,
   type MusicProvider,
   type Page,
@@ -66,6 +68,7 @@ const errorMessage = (e: unknown) => (e instanceof Error ? e.message : String(e)
 export default function App() {
   const [connected, setConnected] = useState(false)
   const [restored, setRestored] = useState(false)
+  const [account, setAccount] = useState<Account | null>(null)
   const [view, setView] = useState<View>({ kind: 'home' })
   const [query, setQuery] = useState('')
   const [tracks, setTracks] = useState<Track[]>([])
@@ -107,6 +110,8 @@ export default function App() {
 
   const leaveSession = useCallback(() => {
     setConnected(false)
+    setAccount(null)
+    setQuery('')
     setPlaylists(null)
     setPlaylistsError(null)
     setHome(null)
@@ -143,6 +148,10 @@ export default function App() {
   useEffect(() => {
     if (connected) loadPlaylists()
   }, [connected, loadPlaylists])
+
+  useEffect(() => {
+    if (connected) provider.account().then(setAccount, () => {}) // only a label: the app works without it
+  }, [connected])
 
   const needsReconnect = connected && provider.needsReconnect()
 
@@ -399,15 +408,11 @@ export default function App() {
     if (connected) run(() => provider.setVolume(v))
   }
 
-  const toggleConnection = () =>
+  const logOut = () =>
     run(async () => {
-      if (connected) {
-        await provider.disconnect()
-        setError(null)
-        leaveSession()
-      } else {
-        await provider.connect() // navigates to the provider's sign-in page
-      }
+      await provider.disconnect()
+      setError(null)
+      leaveSession()
     })
 
   // Signing in again asks Spotify for any permissions added since the last sign-in.
@@ -423,6 +428,17 @@ export default function App() {
   const tintStyle = (
     tint ? { '--tint': tint.vivid, '--tint-dark': tint.dark, '--tint-light': tint.light } : {}
   ) as CSSProperties
+
+  if (provider.configured && !connected)
+    return (
+      <Login
+        providerName={provider.name}
+        restoring={!restored}
+        error={error}
+        onLogin={() => provider.connect({ chooseAccount: true })}
+        onError={setError}
+      />
+    )
 
   return (
     <div className="app" data-provider={provider.id} data-queue={queueOpen && connected} data-tinted={!!tint} style={tintStyle}>
@@ -460,10 +476,16 @@ export default function App() {
           </nav>
         )}
 
-        {provider.configured && restored && (
-          <button className="link-btn" onClick={toggleConnection}>
-            {connected ? `Disconnect ${provider.name}` : `Connect ${provider.name}`}
-          </button>
+        {connected && (
+          <div className="account">
+            {account?.image ? <img src={account.image} alt="" /> : <span className="ph" />}
+            <span className="truncate small" title={account?.name}>
+              {account?.name ?? `${provider.name} account`}
+            </span>
+            <button className="link-btn" onClick={logOut}>
+              Log out
+            </button>
+          </div>
         )}
       </aside>
 
@@ -488,16 +510,6 @@ export default function App() {
                 <li key={s}>{s}</li>
               ))}
             </ol>
-          </section>
-        ) : !restored ? (
-          <section className="empty muted">Connecting…</section>
-        ) : !connected ? (
-          <section className="empty">
-            <h1>Connect {provider.name}</h1>
-            <p className="muted">Sign in to search, browse your library and play music right here.</p>
-            <button className="primary" onClick={toggleConnection}>
-              Connect {provider.name}
-            </button>
           </section>
         ) : (
           <div key={view.kind === 'playlist' ? view.playlist.id : view.kind} className="view fade-in">

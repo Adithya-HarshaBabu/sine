@@ -60,6 +60,11 @@ export const emptyState: PlaybackState = {
   updatedAt: 0,
 }
 
+export interface Account {
+  name: string
+  image?: string
+}
+
 export interface MusicProvider {
   id: ProviderId
   name: string
@@ -67,8 +72,11 @@ export interface MusicProvider {
   configured: boolean
   /** Restores a previous session (and finishes an OAuth redirect). Resolves to whether the user is signed in. */
   restore(): Promise<boolean>
-  connect(): Promise<void>
+  /** Goes to the provider's sign-in page. chooseAccount lets someone switch from the account the provider remembers. */
+  connect(options?: { chooseAccount?: boolean }): Promise<void>
   disconnect(): Promise<void>
+  /** Who is signed in. */
+  account(): Promise<Account>
   search(query: string): Promise<Track[]>
   playlists(): Promise<Playlist[]>
   playlistTracks(id: string, offset: number): Promise<Page>

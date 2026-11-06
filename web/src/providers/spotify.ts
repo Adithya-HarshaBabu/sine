@@ -32,8 +32,10 @@ interface Token {
   scope?: string
 }
 
-const SESSION_ENDED = 'Your Spotify session has ended. Connect again to keep listening.'
+const SESSION_ENDED = 'Your Spotify session has ended. Log in again to keep listening.'
 const UNREACHABLE = "Can't reach Spotify. Check your connection and try again."
+// Development-mode Spotify apps only serve accounts added under User Management; others get a 403 from every call.
+const NO_ACCESS = "This Spotify account doesn't have access to Sine yet. Ask the app's owner to add it, then log in again."
 const REQUEST_TIMEOUT_MS = 15_000
 // Waits longer than this are reported rather than sat through with no feedback.
 const MAX_RETRY_WAIT_S = 10
@@ -52,7 +54,7 @@ let sdkLoading: Promise<void> | null = null
 let pollTimer: number | undefined
 let restoring: Promise<boolean> | null = null
 let refreshing: Promise<Token> | null = null
-let userId: Promise<string> | null = null
+let profile: Promise<ApiProfile> | null = null
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
@@ -74,7 +76,7 @@ function clearSession() {
   resolveDevice = null
   playerOffline = false
   restoring = null
-  userId = null
+  profile = null
   localStorage.removeItem(TOKEN_KEY)
   states.emit(emptyState)
 }
@@ -214,6 +216,12 @@ interface ApiTrack {
   album: { name: string; images: { url: string }[] }
 }
 
+interface ApiProfile {
+  id: string
+  display_name: string | null
+  images?: { url: string }[]
+}
+
 interface ApiPlaylist {
   id: string
   name: string
@@ -350,7 +358,11 @@ async function readyDevice(): Promise<string> {
   return Promise.race([deviceId!, timeout])
 }
 
-const myId = () => (userId ??= api<{ id: string }>('/me').then((me) => me.id))
+const me = () =>
+  (profile ??= api<ApiProfile>('/me').catch((e) => {
+    profile = null // don't remember a failure, so "Try again" can succeed
+    throw e
+  }))
 
 async function startPlayback(body: object): Promise<void> {
   const id = await readyDevice()
@@ -379,6 +391,18 @@ export const spotify: MusicProvider = {
       // A cancelled or failed sign-in shouldn't cost an existing session (e.g. backing out of a reconnect).
       await finishRedirect().catch((e) => errors.emit(e.message))
       if (!loadToken()) return false
+      // Check access up front, so an account Spotify won't serve gets one clear message instead of errors everywhere.
+      // Other failures (e.g. offline) are temporary: stay signed in and let the app report them.
+      try {
+        await me()
+      } catch (e) {
+        if ((e as { status?: number }).status === 403) {
+          clearSession()
+          errors.emit(NO_ACCESS)
+          return false
+        }
+      }
+      if (!loadToken()) return false // Spotify rejected the sign-in while checking
       // The library works without the player, so a blocked or slow SDK mustn't hold up the app.
       startPlayer().catch((e) => errors.emit(e.message))
       return true
@@ -386,7 +410,7 @@ export const spotify: MusicProvider = {
     return restoring
   },
 
-  async connect() {
+  async connect({ chooseAccount = false } = {}) {
     const verifier = randomString()
     const state = randomString()
     const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)))
@@ -401,11 +425,18 @@ export const spotify: MusicProvider = {
       scope: SCOPES,
       state,
     })
+    // Without this, Spotify silently reuses whichever account this browser last used.
+    if (chooseAccount) params.set('show_dialog', 'true')
     location.assign(`https://accounts.spotify.com/authorize?${params}`)
   },
 
   async disconnect() {
     clearSession()
+  },
+
+  async account() {
+    const { id, display_name, images } = await me()
+    return { name: display_name || id, image: images?.[0]?.url }
   },
 
   async search(query) {
@@ -434,13 +465,13 @@ export const spotify: MusicProvider = {
         if (!page.next || !page.items.length) return items
       }
     }
-    const [items, me] = await Promise.all([fetchAll(), myId()])
+    const [items, { id: myId }] = await Promise.all([fetchAll(), me()])
     return items.filter(Boolean).map<Playlist>((p) => ({
       id: p.id,
       name: p.name,
       artwork: p.images?.at(-1)?.url ?? p.images?.[0]?.url,
       count: p.items?.total ?? p.tracks?.total,
-      readable: p.owner.id === me || p.collaborative,
+      readable: p.owner.id === myId || p.collaborative,
     }))
   },
 
