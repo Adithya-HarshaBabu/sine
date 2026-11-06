@@ -23,7 +23,7 @@ export function Home({ data, error, needsReconnect, state, onReconnect, onRetry,
       <h1>{greeting()}</h1>
       {needsReconnect ? (
         <div className="reconnect">
-          <p>Sine has new features (your recently played, top artists and likes) that need one more Spotify permission.</p>
+          <p>Sine has new features that need one more Spotify permission, so please reconnect to turn them on.</p>
           <button className="primary" onClick={onReconnect}>
             Reconnect Spotify
           </button>

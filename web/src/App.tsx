@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Form
 import { spotify } from './providers/spotify'
 import { useArtworkTint } from './lib/artworkColor'
 import { readPref, writePref } from './lib/prefs'
+import { useAssistant } from './lib/useAssistant'
+import { Assistant } from './components/Assistant'
 import { Home } from './components/Home'
 import { Login } from './components/Login'
 import { NowPlaying } from './components/NowPlaying'
@@ -36,6 +38,7 @@ import {
   SearchIcon,
   ShuffleIcon,
   SineIcon,
+  SparkIcon,
   VolumeIcon,
 } from './icons'
 
@@ -48,6 +51,7 @@ type View =
   | { kind: 'saved' }
   | { kind: 'playlists' }
   | { kind: 'playlist'; playlist: Playlist }
+  | { kind: 'assistant' }
 
 const SETUP_STEPS = [
   'Create an app at developer.spotify.com/dashboard and enable “Web API” and “Web Playback SDK”.',
@@ -98,6 +102,13 @@ export default function App() {
   const request = useRef(0)
   const sentinel = useRef<HTMLDivElement>(null)
 
+  const onPlaylistCreated = useCallback(
+    (playlist: Playlist) => setPlaylists((prev) => (prev ? [playlist, ...prev] : prev)),
+    [],
+  )
+  const assistant = useAssistant(provider, onPlaylistCreated)
+  const clearAssistant = assistant.clear
+
   const showView = useCallback((next: View) => {
     request.current++
     pager.current = null
@@ -119,8 +130,9 @@ export default function App() {
     setSaved({})
     setQueue(null)
     setNowOpen(false)
+    clearAssistant() // the next person on this browser shouldn't see this chat
     showView({ kind: 'home' })
-  }, [showView])
+  }, [showView, clearAssistant])
 
   // Restore the session (this also completes the OAuth redirect) and subscribe to player events.
   useEffect(() => {
@@ -244,6 +256,7 @@ export default function App() {
       if (view.playlist.readable) loadFirst((offset) => provider.playlistTracks(view.playlist.id, offset))
       return
     }
+    if (view.kind !== 'search') return
     const q = query.trim()
     if (!q) return
     const timer = setTimeout(
@@ -458,6 +471,9 @@ export default function App() {
             <button className={view.kind === 'saved' ? 'current' : ''} onClick={() => showView({ kind: 'saved' })}>
               <HeartIcon /> Liked songs
             </button>
+            <button className={view.kind === 'assistant' ? 'current' : ''} onClick={() => showView({ kind: 'assistant' })}>
+              <SparkIcon /> Assistant
+            </button>
             {/* On narrow screens the sidebar list is hidden, so playlists get their own view. */}
             <button
               className={`narrow-only ${view.kind === 'playlists' || view.kind === 'playlist' ? 'current' : ''}`}
@@ -513,7 +529,7 @@ export default function App() {
           </section>
         ) : (
           <div key={view.kind === 'playlist' ? view.playlist.id : view.kind} className="view fade-in">
-            {needsReconnect && view.kind !== 'home' && (
+            {needsReconnect && view.kind !== 'home' && view.kind !== 'assistant' && (
               <div className="notice">
                 Reconnect Spotify to turn on Home, likes and your listening history.
                 <button onClick={reconnect}>Reconnect</button>
@@ -535,6 +551,13 @@ export default function App() {
                   showView({ kind: 'search' })
                   setQuery(a.name)
                 }}
+              />
+            ) : view.kind === 'assistant' ? (
+              <Assistant
+                assistant={assistant}
+                needsReconnect={needsReconnect}
+                onReconnect={reconnect}
+                onOpenPlaylist={(p) => showView({ kind: 'playlist', playlist: p })}
               />
             ) : (
             <>

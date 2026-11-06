@@ -18,6 +18,7 @@ const SCOPES = [
   'user-top-read',
   'playlist-read-private',
   'playlist-read-collaborative',
+  'playlist-modify-private',
 ].join(' ')
 const API = 'https://api.spotify.com/v1'
 const TOKEN_KEY = 'spotify.token'
@@ -437,6 +438,37 @@ export const spotify: MusicProvider = {
   async account() {
     const { id, display_name, images } = await me()
     return { name: display_name || id, image: images?.[0]?.url }
+  },
+
+  authToken: () => accessToken(),
+
+  async findTrack(title, artist) {
+    const searchFor = async (q: string) => {
+      const res = await api<{ tracks: { items: (ApiTrack | null)[] } }>(
+        `/search?${new URLSearchParams({ q, type: 'track', limit: '1' })}`,
+      )
+      return res.tracks.items.find(Boolean) ?? null
+    }
+    const quoted = (s: string) => `"${s.replace(/"/g, '')}"`
+    // Field filters are exact and can miss on small differences in a title, so fall back to a plain search.
+    const exact = artist ? await searchFor(`track:${quoted(title)} artist:${quoted(artist)}`) : null
+    const found = exact ?? (await searchFor(`${title} ${artist}`.trim()))
+    return found && toTrack(found)
+  },
+
+  async createPlaylist(name, description) {
+    const { id } = await api<{ id: string }>('/me/playlists', {
+      method: 'POST',
+      body: JSON.stringify({ name, description, public: false }),
+    })
+    return { id, name, count: 0, readable: true }
+  },
+
+  async addTracks(playlistId, tracks) {
+    await api(`/playlists/${playlistId}/items`, {
+      method: 'POST',
+      body: JSON.stringify({ uris: tracks.map((t) => t.uri) }),
+    })
   },
 
   async search(query) {

@@ -18,7 +18,8 @@ export const ShuffleIcon = (p: SVGProps<SVGSVGElement>) => <Icon d="M17 3l4 4-4 
 export const RepeatIcon = (p: SVGProps<SVGSVGElement>) => <Icon d="M7 7h10v3l4-4-4-4v3H5v6h2V7Zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4Z" {...p} />
 export const RepeatOneIcon = (p: SVGProps<SVGSVGElement>) => <Icon d="M7 7h10v3l4-4-4-4v3H5v6h2V7Zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4Zm-4-2V9h-1l-2 1v1h1.5v4H13Z" {...p} />
 export const QueueIcon = (p: SVGProps<SVGSVGElement>) => <Icon d="M3 5h13v2H3V5Zm0 6h13v2H3v-2Zm0 6h8v2H3v-2Zm12 0v-4l6 3-6 3v-2Z" {...p} />
-export const SineIcon = (p: SVGProps<SVGSVGElement>) => (
+export const SparkIcon = (p: SVGProps<SVGSVGElement>) => <Icon d="M11 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2 2-6Zm8 12 .9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15Z" {...p} />
+export const SineIcon =(p: SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true" {...p}>
     <path d="M2 12c2.5-8 5.5-8 8 0s5.5 8 8 0 3-4 4-4" />
   </svg>

@@ -77,6 +77,14 @@ export interface MusicProvider {
   disconnect(): Promise<void>
   /** Who is signed in. */
   account(): Promise<Account>
+  /** A current sign-in token, so Sine's own server can check who is calling. */
+  authToken(): Promise<string>
+  /** The best match for a song, or null if there isn't one. */
+  findTrack(title: string, artist: string): Promise<Track | null>
+  /** Creates an empty private playlist in the user's library. */
+  createPlaylist(name: string, description: string): Promise<Playlist>
+  /** Adds up to 100 tracks to a playlist. */
+  addTracks(playlistId: string, tracks: Track[]): Promise<void>
   search(query: string): Promise<Track[]>
   playlists(): Promise<Playlist[]>
   playlistTracks(id: string, offset: number): Promise<Page>
