@@ -1442,6 +1442,22 @@ input.draft-name:focus {
 .draft-tracks button:hover {
   color: var(--text);
 }
+.draft-tracks .row-play {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--hover);
+  color: var(--text);
+}
+.draft-tracks .row-play:hover,
+.draft-tracks .row-play.on {
+  background: var(--accent);
+  color: #000;
+}
 .draft-missing,
 .draft-error {
   margin: 0;

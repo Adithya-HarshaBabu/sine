@@ -558,6 +558,9 @@ export default function App() {
                 needsReconnect={needsReconnect}
                 onReconnect={reconnect}
                 onOpenPlaylist={(p) => showView({ kind: 'playlist', playlist: p })}
+                state={state}
+                onPlay={playList}
+                onTogglePlay={() => run(() => provider.togglePlay())}
               />
             ) : (
             <>

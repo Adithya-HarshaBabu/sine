@@ -7,28 +7,29 @@ import { z } from 'zod'
 // The larger Flash models can take over a minute on the free tier, which is too slow for a chat.
 const DEFAULT_MODEL = 'gemini-3.5-flash-lite'
 
-const SYSTEM = `You help people build Spotify playlists inside a music app called Sine.
+const SYSTEM = `You help people find songs and build Spotify playlists inside a music app called Sine.
 
-Reply with a short, friendly message and, when the person wants a playlist, a proposed playlist.
+Always reply with a short, friendly message. Then choose what the person wants:
+
+Songs to listen to: they name a song, ask to play or find something, or ask for recommendations without mentioning a playlist. A song name on its own counts. Put the songs in "songs", at most 20, and set "playlist" to null. The app shows each song with a play button, so don't say that it's playing.
+
+A playlist: they ask for a playlist, or to save or add songs to one. Put it in "playlist" and leave "songs" empty.
 - Include every song they name, in the order they give.
 - Use the playlist name they give. If they don't give one, pick a short, natural name.
-- If they ask for suggestions (for example "10 more like this"), suggest real, released songs that you're confident exist.
-- Give each song's exact title and main artist, so it can be found by search. Use an empty artist if you can't tell.
 - Propose at most 100 songs.
 - When they change a playlist you proposed earlier, return the complete updated playlist.
-- If they aren't asking for a playlist, set playlist to null and say what you can help with.
+- The app shows the playlist for them to review, so don't ask for confirmation or claim that it has been created.
 
-The app shows the playlist for them to review, so don't ask for confirmation or claim that it has been created.`
+Anything else: leave "songs" empty, set "playlist" to null and say what you can help with.
+
+For every song, give its exact title and main artist, so it can be found by search. Use an empty artist if you can't tell. When suggesting songs (for example "10 more like this"), suggest only real, released songs that you're confident exist.`
+
+const Song = z.object({ title: z.string(), artist: z.string() })
 
 const Proposal = z.object({
   reply: z.string(),
-  playlist: z
-    .object({
-      name: z.string(),
-      description: z.string(),
-      songs: z.array(z.object({ title: z.string(), artist: z.string() })),
-    })
-    .nullable(),
+  songs: z.array(Song),
+  playlist: z.object({ name: z.string(), description: z.string(), songs: z.array(Song) }).nullable(),
 })
 
 const { $schema: _draft, ...responseSchema } = z.toJSONSchema(Proposal)

@@ -14,21 +14,29 @@ export interface Draft {
   error?: string
 }
 
+export interface Found {
+  tracks: Track[]
+  missing: { title: string; artist: string }[]
+}
+
 export type Entry =
   | { role: 'user'; text: string }
-  | { role: 'assistant'; text: string; draft?: Draft }
+  | { role: 'assistant'; text: string; draft?: Draft; found?: Found }
   | { role: 'error'; text: string }
 
 interface Proposal {
   reply: string
+  songs: { title: string; artist: string }[]
   playlist: { name: string; description: string; songs: { title: string; artist: string }[] } | null
 }
+
+const asSongs = (tracks: Track[] = []) => tracks.map((t) => ({ title: t.title, artist: t.artist }))
 
 const MAX_SONGS = 100
 const MAX_HISTORY = 30
 const SEARCHES_AT_ONCE = 4
 
-async function findAll(provider: MusicProvider, songs: { title: string; artist: string }[]) {
+async function findAll(provider: MusicProvider, songs: { title: string; artist: string }[]): Promise<Found> {
   const results = new Array<Track | null>(songs.length).fill(null)
   let next = 0
   const worker = async () => {
@@ -53,9 +61,10 @@ function toHistory(entries: Entry[]) {
     const playlist = draft && {
       name: draft.name,
       description: draft.description,
-      songs: draft.tracks.map((t) => ({ title: t.title, artist: t.artist })),
+      songs: asSongs(draft.tracks),
     }
-    return [{ role: 'assistant', content: JSON.stringify({ reply: e.text, playlist: playlist ?? null }) }]
+    const content = JSON.stringify({ reply: e.text, songs: asSongs(e.found?.tracks), playlist: playlist ?? null })
+    return [{ role: 'assistant', content }]
   })
   const recent = history.slice(-MAX_HISTORY)
   return recent.slice(recent.findIndex((m) => m.role === 'user'))
@@ -81,16 +90,13 @@ export function useAssistant(provider: MusicProvider, onCreated: (playlist: Play
         })
         const body = await res.json().catch(() => null)
         if (!res.ok || !body) throw new Error(body?.error ?? "The assistant isn't available right now.")
-        const { reply, playlist } = body as Proposal
-        if (playlist && id === conversation.current) setBusy('matching')
-        const draft = playlist
-          ? {
-              name: playlist.name,
-              description: playlist.description,
-              ...(await findAll(provider, playlist.songs.slice(0, MAX_SONGS))),
-            }
-          : undefined
-        if (id === conversation.current) setEntries([...history, { role: 'assistant', text: reply, draft }])
+        const { reply, songs, playlist } = body as Proposal
+        const wanted = playlist?.songs ?? songs
+        if (wanted.length && id === conversation.current) setBusy('matching')
+        const matched = await findAll(provider, wanted.slice(0, MAX_SONGS))
+        const draft = playlist ? { name: playlist.name, description: playlist.description, ...matched } : undefined
+        const found = !playlist && wanted.length ? matched : undefined
+        if (id === conversation.current) setEntries([...history, { role: 'assistant', text: reply, draft, found }])
       } catch (e) {
         const timedOut = e instanceof DOMException
         const text = timedOut ? "The assistant didn't respond in time." : e instanceof TypeError ? "Can't reach the assistant. Check your connection." : (e as Error).message

@@ -1,8 +1,15 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import type { AssistantState, Draft } from '../lib/useAssistant'
-import type { Playlist } from '../types'
+import { PauseIcon, PlayIcon } from '../icons'
+import type { AssistantState, Draft, Found } from '../lib/useAssistant'
+import type { PlaybackState, Playlist, Track } from '../types'
 
-interface Props {
+interface Player {
+  state: PlaybackState
+  onPlay(tracks: Track[], index: number): void
+  onTogglePlay(): void
+}
+
+interface Props extends Player {
   assistant: AssistantState
   needsReconnect: boolean
   onReconnect(): void
@@ -10,21 +17,66 @@ interface Props {
 }
 
 const EXAMPLES = [
+  'Play Raat Ki Rani by Seedhe Maut',
   'Make a playlist called Road Trip with Raat Ki Rani by Seedhe Maut and Blinding Lights',
   'A 15-song playlist for late-night coding',
 ]
+
+const songName = (s: Found['missing'][number]) => [s.title, s.artist].filter(Boolean).join(' by ')
+
+function PlayButton({ tracks, index, state, onPlay, onTogglePlay }: Player & { tracks: Track[]; index: number }) {
+  const track = tracks[index]
+  const current = state.track?.uri === track.uri
+  const playing = current && state.isPlaying
+  return (
+    <button
+      className={`row-play ${current ? 'on' : ''}`}
+      // Resume in place if this song is already loaded, rather than restarting it.
+      onClick={() => (current ? onTogglePlay() : onPlay(tracks, index))}
+      aria-label={`${playing ? 'Pause' : 'Play'} ${track.title}`}
+    >
+      {playing ? <PauseIcon width={18} height={18} /> : <PlayIcon width={18} height={18} />}
+    </button>
+  )
+}
+
+function FoundSongs({ found, player }: { found: Found; player: Player }) {
+  return (
+    <div className="draft">
+      {found.tracks.length > 0 && (
+        <ol className="draft-tracks">
+          {found.tracks.map((t, i) => (
+            <li key={t.uri}>
+              {t.artwork ? <img src={t.artwork} alt="" loading="lazy" /> : <span className="ph" />}
+              <span className="meta">
+                <span className="truncate">{t.title}</span>
+                <span className="muted small truncate">{t.artist}</span>
+              </span>
+              <PlayButton tracks={found.tracks} index={i} {...player} />
+            </li>
+          ))}
+        </ol>
+      )}
+      {found.missing.length > 0 && (
+        <p className="muted small draft-missing">Not found on Spotify: {found.missing.map(songName).join(', ')}</p>
+      )}
+    </div>
+  )
+}
 
 function DraftCard({
   draft,
   index,
   latest,
   assistant,
+  player,
   onOpenPlaylist,
 }: {
   draft: Draft
   index: number
   latest: boolean
   assistant: AssistantState
+  player: Player
   onOpenPlaylist(playlist: Playlist): void
 }) {
   // Older drafts are superseded, so only the latest can still be edited and created.
@@ -47,13 +99,14 @@ function DraftCard({
       </div>
 
       <ol className="draft-tracks">
-        {draft.tracks.map((t) => (
+        {draft.tracks.map((t, i) => (
           <li key={t.uri}>
             {t.artwork ? <img src={t.artwork} alt="" loading="lazy" /> : <span className="ph" />}
             <span className="meta">
               <span className="truncate">{t.title}</span>
               <span className="muted small truncate">{t.artist}</span>
             </span>
+            <PlayButton tracks={draft.tracks} index={i} {...player} />
             {editable && (
               <button
                 onClick={() =>
@@ -69,9 +122,7 @@ function DraftCard({
       </ol>
 
       {draft.missing.length > 0 && (
-        <p className="muted small draft-missing">
-          Not found on Spotify: {draft.missing.map((s) => [s.title, s.artist].filter(Boolean).join(' by ')).join(', ')}
-        </p>
+        <p className="muted small draft-missing">Not found on Spotify: {draft.missing.map(songName).join(', ')}</p>
       )}
       {draft.error && (
         <p className="draft-error small" role="alert">
@@ -98,8 +149,9 @@ function DraftCard({
   )
 }
 
-export function Assistant({ assistant, needsReconnect, onReconnect, onOpenPlaylist }: Props) {
+export function Assistant({ assistant, needsReconnect, onReconnect, onOpenPlaylist, state, onPlay, onTogglePlay }: Props) {
   const { entries, busy, send, retry, clear } = assistant
+  const player = { state, onPlay, onTogglePlay }
   const [text, setText] = useState('')
   const end = useRef<HTMLDivElement>(null)
 
@@ -122,7 +174,7 @@ export function Assistant({ assistant, needsReconnect, onReconnect, onOpenPlayli
       <header className="assistant-head">
         <div>
           <h1>Assistant</h1>
-          <p className="muted small">Name some songs or describe a mood. You'll review the playlist before it's created.</p>
+          <p className="muted small">Ask for a song to play, or for a playlist to review and save.</p>
         </div>
         {entries.length > 0 && (
           <button className="link-btn" onClick={clear}>
@@ -163,12 +215,14 @@ export function Assistant({ assistant, needsReconnect, onReconnect, onOpenPlayli
           ) : (
             <div key={i} className="bubble">
               {entry.text}
+              {entry.found && <FoundSongs found={entry.found} player={player} />}
               {entry.draft && (
                 <DraftCard
                   draft={entry.draft}
                   index={i}
                   latest={i === latestDraft}
                   assistant={assistant}
+                  player={player}
                   onOpenPlaylist={onOpenPlaylist}
                 />
               )}
@@ -187,7 +241,7 @@ export function Assistant({ assistant, needsReconnect, onReconnect, onOpenPlayli
           value={text}
           onChange={(e) => setText(e.target.value)}
           maxLength={2000}
-          placeholder="Ask for a playlist…"
+          placeholder="Ask for a song or a playlist…"
           aria-label="Message the assistant"
         />
         <button className="primary" disabled={!!busy || !text.trim()}>

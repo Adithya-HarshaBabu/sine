@@ -16,7 +16,7 @@ npm run dev                  # http://127.0.0.1:5173 (use the IP, not localhost)
 Requires Spotify Premium. Development-mode apps allow up to 5 test users, search returns at most 10 results per page, and track lists only load for playlists you own or collaborate on (the playlist **Play** button streams any playlist).
 
 ## Assistant
-Describe a playlist in chat and Sine proposes one using Google Gemini, matches the songs on Spotify, and creates it as a private playlist once you confirm. `api/assistant.ts` is a Vercel function that keeps the API key on the server.
+Ask for a song in chat and Sine finds it with a play button, or describe a playlist and Sine proposes one using Google Gemini, matches the songs on Spotify, and creates it as a private playlist once you confirm. `api/assistant.ts` is a Vercel function that keeps the API key on the server.
 
 1. Create a free key in [Google AI Studio](https://aistudio.google.com) and add it to the Vercel project's environment variables as `GEMINI_API_KEY`, then redeploy. Don't enable billing on the project if you want to stay on the free tier.
 2. Optionally set `ASSISTANT_ALLOWED_USERS` to a comma-separated list of Spotify user IDs. Any valid Spotify sign-in can use the assistant without it. Everyone shares one free quota, shown in AI Studio.
