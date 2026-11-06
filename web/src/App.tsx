@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { spotify } from './providers/spotify'
 import { useArtworkTint } from './lib/artworkColor'
+import { readPref, writePref } from './lib/prefs'
 import { Home } from './components/Home'
 import { NowPlaying } from './components/NowPlaying'
+import { PlaylistNav } from './components/PlaylistNav'
 import { TrackList } from './components/TrackList'
 import { WaveProgress } from './components/WaveProgress'
 import {
@@ -54,21 +56,6 @@ const SETUP_STEPS = [
 
 const NEXT_REPEAT: Record<RepeatMode, RepeatMode> = { off: 'context', context: 'track', track: 'off' }
 
-const readPref = <T,>(key: string, fallback: T): T => {
-  try {
-    return (JSON.parse(localStorage.getItem(key) ?? 'null') as T) ?? fallback
-  } catch {
-    return fallback
-  }
-}
-const writePref = (key: string, value: unknown) => {
-  try {
-    localStorage.setItem(key, JSON.stringify(value))
-  } catch {
-    /* storage unavailable */
-  }
-}
-
 const formatTime = (ms: number) => {
   const s = Math.max(0, Math.floor(ms / 1000))
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
@@ -83,9 +70,12 @@ export default function App() {
   const [query, setQuery] = useState('')
   const [tracks, setTracks] = useState<Track[]>([])
   const [total, setTotal] = useState(0)
-  const [playlists, setPlaylists] = useState<Playlist[]>([])
+  const [playlists, setPlaylists] = useState<Playlist[] | null>(null)
+  const [playlistsError, setPlaylistsError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [listFailed, setListFailed] = useState(false)
+  const [moreFailed, setMoreFailed] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [state, setState] = useState<PlaybackState>(emptyState)
   const [volume, setVolume] = useState(() => readPref('volume', 0.7))
@@ -95,6 +85,7 @@ export default function App() {
   const [now, setNow] = useState(Date.now())
   const [home, setHome] = useState<HomeData | null>(null)
   const [homeError, setHomeError] = useState<string | null>(null)
+  const [homeAttempt, setHomeAttempt] = useState(0)
   const [saved, setSaved] = useState<Record<string, boolean>>({})
   const [nowOpen, setNowOpen] = useState(false)
   const [showLyrics, setShowLyrics] = useState(() => readPref('showLyrics', true))
@@ -104,20 +95,54 @@ export default function App() {
   const request = useRef(0)
   const sentinel = useRef<HTMLDivElement>(null)
 
+  const showView = useCallback((next: View) => {
+    request.current++
+    pager.current = null
+    setView(next)
+    setTracks([])
+    setTotal(0)
+    setListFailed(false)
+    setMoreFailed(false)
+  }, [])
+
+  const leaveSession = useCallback(() => {
+    setConnected(false)
+    setPlaylists(null)
+    setPlaylistsError(null)
+    setHome(null)
+    setHomeError(null)
+    setSaved({})
+    setQueue(null)
+    setNowOpen(false)
+    showView({ kind: 'home' })
+  }, [showView])
+
   // Restore the session (this also completes the OAuth redirect) and subscribe to player events.
   useEffect(() => {
-    const unsubs = [provider.onState(setState), provider.onError(setError)]
+    const unsubs = [
+      provider.onState(setState),
+      provider.onError(setError),
+      provider.onSessionEnded((message) => {
+        leaveSession()
+        setError(message)
+      }),
+    ]
     provider
       .restore()
       .then(setConnected, (e) => setError(errorMessage(e)))
       .finally(() => setRestored(true))
     return () => unsubs.forEach((u) => u())
+  }, [leaveSession])
+
+  const loadPlaylists = useCallback(() => {
+    setPlaylists(null)
+    setPlaylistsError(null)
+    provider.playlists().then(setPlaylists, (e) => setPlaylistsError(errorMessage(e)))
   }, [])
 
   useEffect(() => {
-    if (!connected) return
-    provider.playlists().then(setPlaylists, (e) => setError(errorMessage(e)))
-  }, [connected])
+    if (connected) loadPlaylists()
+  }, [connected, loadPlaylists])
 
   const needsReconnect = connected && provider.needsReconnect()
 
@@ -130,7 +155,7 @@ export default function App() {
       },
       (e) => setHomeError(errorMessage(e)),
     )
-  }, [connected, needsReconnect, view.kind])
+  }, [connected, needsReconnect, view.kind, homeAttempt])
 
   // Look up liked status for any visible track we haven't checked yet.
   useEffect(() => {
@@ -157,18 +182,12 @@ export default function App() {
     })
   }
 
-  const showView = (next: View) => {
-    request.current++
-    pager.current = null
-    setView(next)
-    setTracks([])
-    setTotal(0)
-  }
-
   const loadFirst = useCallback(async (fetchPage: (offset: number) => Promise<Page>) => {
     const id = ++request.current
     pager.current = fetchPage
     setLoading(true)
+    setListFailed(false)
+    setMoreFailed(false)
     setError(null)
     try {
       const page = await fetchPage(0)
@@ -176,7 +195,11 @@ export default function App() {
       setTracks(page.tracks)
       setTotal(page.total)
     } catch (e) {
-      if (id === request.current) setError(errorMessage(e))
+      if (id === request.current) {
+        setTracks([])
+        setListFailed(true)
+        setError(errorMessage(e))
+      }
     } finally {
       if (id === request.current) setLoading(false)
     }
@@ -184,18 +207,22 @@ export default function App() {
 
   const loadMore = useCallback(async () => {
     const fetchPage = pager.current
-    if (!fetchPage || loading || loadingMore || tracks.length >= total) return
+    // After a failure, wait for "Try again": the observer below would otherwise refire in a tight loop.
+    if (!fetchPage || loading || loadingMore || moreFailed || tracks.length >= total) return
     const id = request.current
     setLoadingMore(true)
     try {
       const page = await fetchPage(tracks.length)
       if (id === request.current) setTracks((prev) => [...prev, ...page.tracks])
     } catch (e) {
-      if (id === request.current) setError(errorMessage(e))
+      if (id === request.current) {
+        setMoreFailed(true)
+        setError(errorMessage(e))
+      }
     } finally {
       setLoadingMore(false)
     }
-  }, [loading, loadingMore, tracks.length, total])
+  }, [loading, loadingMore, moreFailed, tracks.length, total])
 
   // Fetch the list for the current view; search runs as you type, after a short pause.
   useEffect(() => {
@@ -376,12 +403,8 @@ export default function App() {
     run(async () => {
       if (connected) {
         await provider.disconnect()
-        setConnected(false)
-        setPlaylists([])
-        setHome(null)
-        setSaved({})
-        setNowOpen(false)
-        showView({ kind: 'home' })
+        setError(null)
+        leaveSession()
       } else {
         await provider.connect() // navigates to the provider's sign-in page
       }
@@ -427,24 +450,13 @@ export default function App() {
               <NoteIcon /> Playlists
             </button>
             <div className="nav-label">Playlists</div>
-            <div className="playlists">
-              {playlists.map((p) => (
-                <button
-                  key={p.id}
-                  className={view.kind === 'playlist' && view.playlist.id === p.id ? 'current' : ''}
-                  onClick={() => showView({ kind: 'playlist', playlist: p })}
-                >
-                  {p.artwork ? <img src={p.artwork} alt="" /> : <span className="ph" />}
-                  <span className="pl-meta">
-                    <span className="truncate">{p.name}</span>
-                    <span className="small muted truncate">
-                      {p.readable ? `${p.count ?? 0} songs` : 'Following'}
-                    </span>
-                  </span>
-                </button>
-              ))}
-              {playlists.length === 0 && <div className="muted small">No playlists yet</div>}
-            </div>
+            <PlaylistNav
+              playlists={playlists}
+              error={playlistsError}
+              currentId={view.kind === 'playlist' ? view.playlist.id : undefined}
+              onOpen={(p) => showView({ kind: 'playlist', playlist: p })}
+              onRetry={loadPlaylists}
+            />
           </nav>
         )}
 
@@ -502,6 +514,10 @@ export default function App() {
                 needsReconnect={needsReconnect}
                 state={state}
                 onReconnect={reconnect}
+                onRetry={() => {
+                  setHomeError(null)
+                  setHomeAttempt((n) => n + 1)
+                }}
                 onPlayRecent={playList}
                 onArtist={(a) => {
                   showView({ kind: 'search' })
@@ -547,8 +563,16 @@ export default function App() {
             </header>
 
             {view.kind === 'playlists' ? (
+              playlistsError ? (
+                <div className="load-failed muted">
+                  <p>Couldn't load your playlists.</p>
+                  <button className="retry-btn" onClick={loadPlaylists}>
+                    Try again
+                  </button>
+                </div>
+              ) : (
               <ul className="playlist-grid">
-                {playlists.map((p) => (
+                {(playlists ?? []).map((p) => (
                   <li key={p.id}>
                     <button onClick={() => showView({ kind: 'playlist', playlist: p })}>
                       {p.artwork ? <img src={p.artwork} alt="" loading="lazy" /> : <span className="ph" />}
@@ -558,6 +582,7 @@ export default function App() {
                   </li>
                 ))}
               </ul>
+              )
             ) : unreadablePlaylist ? (
               <div className="embed">
                 <p className="muted small">
@@ -590,6 +615,13 @@ export default function App() {
                   </li>
                 ))}
               </ol>
+            ) : listFailed ? (
+              <div className="load-failed muted">
+                <p>This list didn't load.</p>
+                <button className="retry-btn" onClick={() => pager.current && loadFirst(pager.current)}>
+                  Try again
+                </button>
+              </div>
             ) : tracks.length === 0 ? (
               <div className="empty muted">
                 {view.kind === 'search'
@@ -610,6 +642,11 @@ export default function App() {
                 />
                 <div ref={sentinel} className="more muted small">
                   {loadingMore && 'Loading more…'}
+                  {moreFailed && (
+                    <button className="retry-btn" onClick={() => setMoreFailed(false)}>
+                      Try loading more again
+                    </button>
+                  )}
                 </div>
               </>
             )}

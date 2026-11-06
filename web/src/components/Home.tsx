@@ -7,6 +7,7 @@ interface Props {
   needsReconnect: boolean
   state: PlaybackState
   onReconnect(): void
+  onRetry(): void
   onPlayRecent(tracks: Track[], index: number): void
   onArtist(artist: Artist): void
 }
@@ -16,7 +17,7 @@ const greeting = () => {
   return h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'
 }
 
-export function Home({ data, error, needsReconnect, state, onReconnect, onPlayRecent, onArtist }: Props) {
+export function Home({ data, error, needsReconnect, state, onReconnect, onRetry, onPlayRecent, onArtist }: Props) {
   return (
     <div className="home fade-in">
       <h1>{greeting()}</h1>
@@ -27,8 +28,13 @@ export function Home({ data, error, needsReconnect, state, onReconnect, onPlayRe
             Reconnect Spotify
           </button>
         </div>
-      ) : error ? (
-        <p className="muted">{error}</p>
+      ) : error && !data ? (
+        <div className="load-failed muted">
+          <p>{error}</p>
+          <button className="retry-btn" onClick={onRetry}>
+            Try again
+          </button>
+        </div>
       ) : !data ? (
         <div className="card-grid">
           {Array.from({ length: 6 }, (_, i) => (

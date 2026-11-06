@@ -94,5 +94,8 @@ export interface MusicProvider {
   setShuffle(on: boolean): Promise<void>
   setRepeat(mode: RepeatMode): Promise<void>
   onState(cb: (state: PlaybackState) => void): () => void
-  onError(cb: (message: string) => void): () => void
+  /** Fires with a message to show, or null when the problem it reported has cleared. */
+  onError(cb: (message: string | null) => void): () => void
+  /** Fires when the sign-in can no longer be used (revoked or expired), with a message to show. */
+  onSessionEnded(cb: (message: string) => void): () => void
 }
