@@ -142,7 +142,7 @@ export function Assistant({ assistant, needsReconnect, onReconnect, onOpenPlayli
         {entries.length === 0 && (
           <div className="chat-examples">
             {EXAMPLES.map((example) => (
-              <button key={example} disabled={busy} onClick={() => send(example)}>
+              <button key={example} disabled={!!busy} onClick={() => send(example)}>
                 {example}
               </button>
             ))}
@@ -177,7 +177,7 @@ export function Assistant({ assistant, needsReconnect, onReconnect, onOpenPlayli
         )}
         {busy && (
           <div className="bubble muted" role="status">
-            Finding your songs…
+            {busy === 'matching' ? 'Finding your songs on Spotify…' : 'Asking Gemini…'}
           </div>
         )}
       </div>
@@ -190,7 +190,7 @@ export function Assistant({ assistant, needsReconnect, onReconnect, onOpenPlayli
           placeholder="Ask for a playlist…"
           aria-label="Message the assistant"
         />
-        <button className="primary" disabled={busy || !text.trim()}>
+        <button className="primary" disabled={!!busy || !text.trim()}>
           Send
         </button>
       </form>

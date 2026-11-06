@@ -4,7 +4,8 @@ import { z } from 'zod'
 // Sine's only server code: it exists to keep GEMINI_API_KEY out of the browser. It proposes playlists and never
 // touches the user's library; the app creates a playlist itself, with the user's own Spotify sign-in, after they confirm.
 
-const DEFAULT_MODEL = 'gemini-3.8-flash'
+// The larger Flash models can take over a minute on the free tier, which is too slow for a chat.
+const DEFAULT_MODEL = 'gemini-3.5-flash-lite'
 
 const SYSTEM = `You help people build Spotify playlists inside a music app called Sine.
 
@@ -65,7 +66,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!body.success) return fail(400, "That message couldn't be sent. Try starting a new chat.")
 
   try {
-    const response = await new GoogleGenAI({ apiKey, httpOptions: { timeout: 90_000 } }).models.generateContent({
+    const response = await new GoogleGenAI({ apiKey, httpOptions: { timeout: 45_000 } }).models.generateContent({
       model: process.env.GEMINI_MODEL || DEFAULT_MODEL,
       contents: body.data.messages.map((m) => ({
         role: m.role === 'assistant' ? 'model' : 'user',
@@ -98,6 +99,7 @@ export async function POST(request: Request): Promise<Response> {
     console.error('Gemini request failed', e)
     if (e instanceof ApiError) {
       if (e.status === 429) return fail(429, 'The assistant has reached its free limit for now. Try again later.')
+      if (e.status === 504) return fail(504, 'Gemini took too long to reply. Try again, or ask for fewer songs.')
       // Gemini reports a bad API key as a 400.
       if (e.status === 400 || e.status === 401 || e.status === 403)
         return fail(503, "The assistant isn't set up correctly. Check its API key and model.")

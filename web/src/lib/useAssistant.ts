@@ -64,24 +64,25 @@ function toHistory(entries: Entry[]) {
 // Lives above the view, so the chat survives moving around the app and can be cleared when someone logs out.
 export function useAssistant(provider: MusicProvider, onCreated: (playlist: Playlist) => void) {
   const [entries, setEntries] = useState<Entry[]>([])
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState<false | 'asking' | 'matching'>(false)
   const conversation = useRef(0) // ignores replies to a chat that has since been cleared
   const creating = useRef(false)
 
   const request = useCallback(
     async (history: Entry[]) => {
       const id = conversation.current
-      setBusy(true)
+      setBusy('asking')
       try {
         const res = await fetch('/api/assistant', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await provider.authToken()}` },
           body: JSON.stringify({ messages: toHistory(history) }),
-          signal: AbortSignal.timeout(120_000),
+          signal: AbortSignal.timeout(60_000),
         })
         const body = await res.json().catch(() => null)
         if (!res.ok || !body) throw new Error(body?.error ?? "The assistant isn't available right now.")
         const { reply, playlist } = body as Proposal
+        if (playlist && id === conversation.current) setBusy('matching')
         const draft = playlist
           ? {
               name: playlist.name,
